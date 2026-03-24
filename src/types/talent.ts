@@ -15,8 +15,11 @@ export type Talent = {
   email: string;
   linkedInRaw: string;
   linkedInHref: string;
+  /** Display + filter skills from sheet column Augmented Skillsets. */
   skillsetRaw: string;
   skillTags: string[];
+  /** Comma-separated notable employers / clients from sheet. */
+  marqueeCompanies: string;
   blueprintArchitect: string;
   desiredSalaryRaw: string;
   salaryNumeric: number | null;

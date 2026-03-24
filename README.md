@@ -1,6 +1,6 @@
 # Blueprint — Talent roster
 
-Internal web app to browse, filter, and sort the contractor talent roster. Data loads from a static CSV in `public/` (export from Google Sheets or your source of truth).
+Internal web app to browse, filter, and sort the contractor talent roster. Data loads from a static JSON file in `public/` (array of row objects keyed by column name).
 
 ## Run locally
 
@@ -13,11 +13,26 @@ Open the URL Vite prints (typically `http://localhost:5173`).
 
 ## Update roster data
 
-1. Export your sheet as CSV with the same column headers as the current template (see `public/roster.csv`).
-2. Replace `public/roster.csv` with the new file (keep the filename `roster.csv` or change the path in `src/App.tsx` where `loadRosterFromUrl` is called).
-3. Refresh the browser.
+### Live refresh (n8n)
 
-Quoted fields and embedded JSON in **Job History JSON** are handled by [Papa Parse](https://www.papaparse.com/).
+The header **Refresh** button calls your n8n webhook (default URL in [src/config/rosterWebhook.ts](src/config/rosterWebhook.ts)), stores the response in **localStorage**, and shows **Last updated** with the fetch time. Requests use `cache: no-store` so the browser does not serve a stale response.
+
+Override the URL without editing code:
+
+```bash
+# .env.local
+VITE_N8N_ROSTER_WEBHOOK=https://your-instance.app.n8n.cloud/webhook/...
+```
+
+The webhook should return JSON: a **array of row objects**, a **single row object** (one person), or an object with an array under `data`, `rows`, `roster`, `items`, or `results`. Each row must match the field names in [src/lib/rosterColumns.ts](src/lib/rosterColumns.ts).
+
+### Bundled fallback
+
+If there is **no** cached webhook payload yet, the app loads `public/roster.json` once. Replace that file to ship a default roster with the build.
+
+`Desired Salary` may be a string (`$50.00`) or a number (`50`). **Job History JSON** may be a string of JSON or an already-parsed array.
+
+The **Skills** column, skill filters, and search use **`Augmented Skillsets`** (comma-separated). The legacy **`Skillset(s)`** column is not read by the app.
 
 ## Build
 

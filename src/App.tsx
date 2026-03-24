@@ -1,5 +1,5 @@
-import { Moon, Sun } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Moon, RefreshCw, Sun } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BlueprintLogo } from "@/components/BlueprintLogo";
 import { FilterBar } from "@/components/FilterBar";
@@ -7,6 +7,7 @@ import { GridBackground } from "@/components/GridBackground";
 import { TalentDetailSheet } from "@/components/TalentDetailSheet";
 import { TalentTable } from "@/components/TalentTable";
 import { Button } from "@/components/ui/button";
+import { N8N_ROSTER_WEBHOOK } from "@/config/rosterWebhook";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   filterTalents,
@@ -14,7 +15,14 @@ import {
   type FacetFilters,
   type FilterState,
 } from "@/lib/filterSort";
-import { loadRosterFromUrl } from "@/lib/roster";
+import { formatRosterUpdatedAt } from "@/lib/formatRosterTime";
+import {
+  fetchRosterPayloadFromWebhook,
+  loadRosterFromUrl,
+  talentsFromPayload,
+} from "@/lib/roster";
+import { readRosterCache, writeRosterCache } from "@/lib/rosterCache";
+import { cn } from "@/lib/utils";
 import type { SortKey, Talent } from "@/types/talent";
 
 function createEmptyFacets(): FacetFilters {
@@ -36,7 +44,11 @@ function applyThemeClass(isDark: boolean) {
 export default function App() {
   const [talents, setTalents] = useState<Talent[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  /** ISO time from last successful webhook refresh (or when that payload was cached). */
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 200);
@@ -63,11 +75,29 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    loadRosterFromUrl("/roster.csv")
+
+    const cached = readRosterCache();
+    if (cached) {
+      const rows = talentsFromPayload(cached.payload);
+      if (rows.length > 0) {
+        if (!cancelled) {
+          setLoadError(null);
+          setTalents(rows);
+          setLastUpdated(cached.updatedAt);
+          setLoading(false);
+        }
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+
+    loadRosterFromUrl("/roster.json")
       .then((rows) => {
         if (!cancelled) {
           setLoadError(null);
           setTalents(rows);
+          setLastUpdated(null);
         }
       })
       .catch((e: unknown) => {
@@ -81,6 +111,29 @@ export default function App() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const payload = await fetchRosterPayloadFromWebhook(N8N_ROSTER_WEBHOOK);
+      const rows = talentsFromPayload(payload);
+      if (rows.length === 0) {
+        throw new Error(
+          "Webhook returned no roster rows with a Name. Return a JSON array of rows (or a single row object).",
+        );
+      }
+      const updatedAt = new Date().toISOString();
+      writeRosterCache({ updatedAt, payload });
+      setTalents(rows);
+      setLastUpdated(updatedAt);
+      setLoadError(null);
+    } catch (e: unknown) {
+      setRefreshError(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   const filterState: FilterState = useMemo(
@@ -126,22 +179,67 @@ export default function App() {
                   ? "Loading…"
                   : `${visible.length} of ${talents.length} shown`}
               </p>
+              {!loading && talents.length > 0 ? (
+                <p
+                  className="text-xs text-muted-foreground mt-1 max-w-xl"
+                  style={{ fontFamily: "var(--font-saans-semimono)" }}
+                >
+                  {lastUpdated ? (
+                    <>
+                      Last updated{" "}
+                      <time dateTime={lastUpdated}>
+                        {formatRosterUpdatedAt(lastUpdated)}
+                      </time>
+                    </>
+                  ) : (
+                    <>
+                      Using bundled{" "}
+                      <code className="text-[11px] px-1 rounded bg-muted">
+                        roster.json
+                      </code>
+                      . Use Refresh to pull the latest sheet via n8n.
+                    </>
+                  )}
+                </p>
+              ) : null}
+              {refreshError ? (
+                <p className="text-xs text-destructive mt-1 max-w-xl" role="alert">
+                  {refreshError}
+                </p>
+              ) : null}
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => setIsDark((d) => !d)}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="shrink-0 border-border"
-          >
-            {isDark ? (
-              <Sun className="size-5" strokeWidth={1.25} />
-            ) : (
-              <Moon className="size-5" strokeWidth={1.25} />
-            )}
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-border gap-2"
+              onClick={() => void handleRefresh()}
+              disabled={loading || refreshing}
+              aria-busy={refreshing}
+            >
+              <RefreshCw
+                className={cn("size-4", refreshing && "animate-spin")}
+                aria-hidden
+              />
+              Refresh
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setIsDark((d) => !d)}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              className="shrink-0 border-border"
+            >
+              {isDark ? (
+                <Sun className="size-5" strokeWidth={1.25} />
+              ) : (
+                <Moon className="size-5" strokeWidth={1.25} />
+              )}
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -153,7 +251,7 @@ export default function App() {
           <div className="rounded-md border border-destructive/50 bg-destructive/10 text-destructive-foreground px-4 py-3 text-sm">
             <strong className="font-medium">Could not load roster.</strong>{" "}
             {loadError} Place{" "}
-            <code className="text-xs bg-background/50 px-1 rounded">roster.csv</code>{" "}
+            <code className="text-xs bg-background/50 px-1 rounded">roster.json</code>{" "}
             in{" "}
             <code className="text-xs bg-background/50 px-1 rounded">public/</code>{" "}
             and refresh.

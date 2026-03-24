@@ -122,7 +122,7 @@ export function TalentDetailSheet({
 
                 <Separator />
 
-                <Field label="Skillset(s)">
+                <Field label="Augmented skillsets">
                   <div className="flex flex-wrap gap-1.5">
                     {t.skillTags.length ? (
                       t.skillTags.map((s) => (
@@ -134,6 +134,24 @@ export function TalentDetailSheet({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </div>
+                </Field>
+
+                <Field label="Marquee companies">
+                  {t.marqueeCompanies.trim() ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {t.marqueeCompanies
+                        .split(/[,;/]/)
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .map((c, i) => (
+                          <Badge key={`${c}-${i}`} variant="secondary">
+                            {c}
+                          </Badge>
+                        ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </Field>
 
                 {(t.comments || t.comments2) && (

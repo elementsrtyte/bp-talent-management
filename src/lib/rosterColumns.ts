@@ -1,9 +1,10 @@
-/** CSV column headers from the talent export (must match sheet export). */
+/** Field names on each roster row in `public/roster.json` (must match your export). */
 export const ROSTER_COLUMNS = {
   name: "Name",
   email: "Email",
   linkedIn: "Final LinkedIn",
-  skillsets: "Skillset(s)",
+  augmentedSkillsets: "Augmented Skillsets",
+  marqueeCompanies: "Marquee Companies",
   blueprintArchitect: "Blueprint Architect™",
   desiredSalary: "Desired Salary",
   seniority: "Seniority",

@@ -22,6 +22,7 @@ function searchHaystack(t: Talent): string {
     t.email,
     t.skillsetRaw,
     ...t.skillTags,
+    t.marqueeCompanies,
     t.currentEmployer,
     t.currentRole,
     t.city,
@@ -54,6 +55,8 @@ export function filterTalents(
     if (filters.architects.size > 0) {
       const a = t.blueprintArchitect.trim();
       if (!filters.architects.has(a)) return false;
+    } else if (t.blueprintArchitect.trim().toLowerCase() === "no") {
+      return false;
     }
 
     if (filters.seniorities.size > 0) {
@@ -139,6 +142,24 @@ export function collectUniqueStrings(
     const v = pick(t).trim();
     set.add(v);
   }
+  return [...set].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" }),
+  );
+}
+
+/** Architect options: unique values in the same cohort as the table with the architect facet cleared, plus current selections. */
+export function collectArchitectFilterOptions(
+  talents: Talent[],
+  filters: FilterState,
+): string[] {
+  const withoutArchitect: FilterState = {
+    ...filters,
+    architects: new Set(),
+  };
+  const pool = filterTalents(talents, withoutArchitect);
+  const fromPool = collectUniqueStrings(pool, (t) => t.blueprintArchitect);
+  const set = new Set(fromPool);
+  for (const s of filters.architects) set.add(s);
   return [...set].sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: "base" }),
   );

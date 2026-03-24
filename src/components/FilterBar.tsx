@@ -12,9 +12,11 @@ import {
 import { cn } from "@/lib/utils";
 import {
   collectAllSkillTags,
+  collectArchitectFilterOptions,
   collectUniqueStrings,
   type FacetFilters,
   isFacetFilterActive,
+  type FilterState,
 } from "@/lib/filterSort";
 import type { SortKey, Talent } from "@/types/talent";
 
@@ -146,10 +148,10 @@ export function FilterBar({
     () => collectUniqueStrings(allTalents, (t) => t.interviewStep),
     [allTalents],
   );
-  const architects = useMemo(
-    () => collectUniqueStrings(allTalents, (t) => t.blueprintArchitect),
-    [allTalents],
-  );
+  const architectOptions = useMemo(() => {
+    const state: FilterState = { ...filters, query: debouncedQuery };
+    return collectArchitectFilterOptions(allTalents, state);
+  }, [allTalents, debouncedQuery, filters]);
   const seniorities = useMemo(
     () => collectUniqueStrings(allTalents, (t) => t.seniority),
     [allTalents],
@@ -174,7 +176,7 @@ export function FilterBar({
       />
       <MultiFilterPopover
         label="Architect"
-        options={architects}
+        options={architectOptions}
         selected={filters.architects}
         onChange={(next) => onFiltersChange({ ...filters, architects: next })}
       />
