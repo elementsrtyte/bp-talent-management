@@ -1,0 +1,20 @@
+/** CSV column headers from the talent export (must match sheet export). */
+export const ROSTER_COLUMNS = {
+  name: "Name",
+  email: "Email",
+  linkedIn: "Final LinkedIn",
+  skillsets: "Skillset(s)",
+  blueprintArchitect: "Blueprint Architect™",
+  desiredSalary: "Desired Salary",
+  seniority: "Seniority",
+  currentEmployer: "Current Employer",
+  jobHistoryJson: "Job History JSON",
+  city: "City",
+  location: "Location",
+  currentRole: "Current Role",
+  referredBy: "Referred By",
+  whoInterviewed: "Who Interviewed",
+  interviewStep: "Interview Step",
+  comments: "Comments",
+  comments2: "Comments 2",
+} as const;
