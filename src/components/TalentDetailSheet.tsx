@@ -1,6 +1,7 @@
 import { ExternalLink, Mail } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { PrivacyName } from "@/components/PrivacyName";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -54,7 +55,11 @@ export function TalentDetailSheet({
         {t ? (
           <>
             <SheetHeader className="p-6 pb-4 border-b border-border shrink-0 text-left space-y-2">
-              <SheetTitle className="text-xl pr-10">{t.name}</SheetTitle>
+              <SheetTitle className="text-xl pr-10" asChild>
+                <span>
+                  <PrivacyName name={t.name} />
+                </span>
+              </SheetTitle>
               <SheetDescription asChild>
                 <div className="flex flex-wrap gap-2">
                   {t.interviewStep ? (

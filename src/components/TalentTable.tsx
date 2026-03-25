@@ -1,5 +1,6 @@
 import { ExternalLink } from "lucide-react";
 
+import { PrivacyName } from "@/components/PrivacyName";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -77,7 +78,10 @@ export function TalentTable({
               >
                 <td className={cn(td, "text-foreground")}>
                   <div className="flex flex-col gap-1 min-w-0 max-w-[min(100%,280px)]">
-                    <span className="font-medium truncate">{t.name}</span>
+                    <PrivacyName
+                      name={t.name}
+                      className="font-medium truncate"
+                    />
                     {marquee ? (
                       <span
                         className="w-fit max-w-full rounded-sm border border-border bg-muted/40 px-1.5 py-0.5 text-[11px] leading-snug text-muted-foreground line-clamp-2"

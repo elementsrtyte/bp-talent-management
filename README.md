@@ -2,6 +2,18 @@
 
 Internal web app to browse, filter, and sort the contractor talent roster. Data loads from a static JSON file in `public/` (array of row objects keyed by column name).
 
+## Screenshots
+
+**Roster** — filters, sort, and table (dark theme).
+
+![Roster table with filters](docs/screenshots/roster-table.png)
+
+**Detail** — row opens a sheet with profile fields and job history.
+
+![Talent detail sheet](docs/screenshots/talent-detail.png)
+
+To regenerate these images after UI changes, install the Playwright browser once (`npx playwright install chromium`), then run `npm run capture:readme`. That build sets `VITE_SCREENGRAB_PRIVACY=true` so **surnames are blurred** in the capture (first name stays readable). Normal `npm run dev` / production builds do not set this.
+
 ## Run locally
 
 ```bash
