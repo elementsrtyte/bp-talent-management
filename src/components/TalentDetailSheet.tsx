@@ -2,8 +2,9 @@ import { ExternalLink, Mail } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { PrivacyName } from "@/components/PrivacyName";
+import { TalentCommentsSection } from "@/components/TalentCommentsSection";
+import { TalentResumesSection } from "@/components/TalentResumesSection";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -173,38 +174,11 @@ export function TalentDetailSheet({
 
                 <Separator />
 
-                <div className="rounded-md border border-border bg-muted/30 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p
-                      className="text-xs text-muted-foreground uppercase tracking-wide"
-                      style={{ fontFamily: "var(--font-saans-semimono)" }}
-                    >
-                      Resume &amp; parsed skills
-                    </p>
-                    <span className="text-[10px] uppercase tracking-wide text-secondary">
-                      Coming soon
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Upload resumes and extract skill tags here in a future
-                    release. The data model already supports optional{" "}
-                    <code className="text-xs bg-background/80 px-1 rounded border border-border">
-                      resumeFileId
-                    </code>
-                    ,{" "}
-                    <code className="text-xs bg-background/80 px-1 rounded border border-border">
-                      parsedSkills
-                    </code>
-                    , and{" "}
-                    <code className="text-xs bg-background/80 px-1 rounded border border-border">
-                      lastParsedAt
-                    </code>
-                    .
-                  </p>
-                  <Button type="button" variant="secondary" size="sm" disabled>
-                    Upload resume
-                  </Button>
-                </div>
+                <TalentCommentsSection talent={t} />
+
+                <Separator />
+
+                <TalentResumesSection talent={t} />
 
                 <Separator />
 

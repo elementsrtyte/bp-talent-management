@@ -59,6 +59,18 @@ Static output is in `dist/` — suitable for any static host (S3, Netlify, Verce
 
 Visual design follows Blueprint tokens (dark-first, purple / teal accents, Saans). Saans is loaded from a third-party CDN (`fonts.cdnfonts.com`), same approach as the marketing landing page. Full notes live in [docs/brand-guidelines.md](docs/brand-guidelines.md).
 
-## Future: resumes & parsed skills
+## Supabase: sign-in, comments, resumes
 
-The `Talent` type includes optional `resumeFileId`, `parsedSkills`, and `lastParsedAt` for a future upload + extraction flow. The detail panel includes a disabled “Upload resume” stub until that ships.
+With `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set (see [.env.example](.env.example)), users authenticate via Supabase. The talent detail sheet includes **internal notes** (`talent_comments`) and **resume uploads** (private `resumes` storage bucket + `talent_resumes` metadata).
+
+If you are locked out locally (e.g. email rate limits), you may set **`VITE_BYPASS_AUTH=true`** in `.env.local` temporarily to load the roster without signing in. Remove it once you can authenticate again; Supabase-backed comments and resumes still require a real session.
+
+Apply the database migration once (SQL Editor in the Supabase dashboard, or `supabase db push` if you use the CLI):
+
+- [supabase/migrations/20260331120000_talent_comments_and_resumes.sql](supabase/migrations/20260331120000_talent_comments_and_resumes.sql)
+
+People are keyed by a stable `talent_key` derived in the app (email when present; otherwise name + LinkedIn). Rows are linked to that key so notes and files survive roster refreshes.
+
+## Future: parsed skills from resumes
+
+The `Talent` type still has optional `resumeFileId`, `parsedSkills`, and `lastParsedAt` for a possible future extraction pipeline (not implemented yet).

@@ -1,6 +1,8 @@
-import { Moon, RefreshCw, Sun } from "lucide-react";
+import { LogOut, Moon, RefreshCw, Sun } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { AuthLoginPage } from "@/components/AuthLoginPage";
+import { AuthUpdatePasswordPage } from "@/components/AuthUpdatePasswordPage";
 import { BlueprintLogo } from "@/components/BlueprintLogo";
 import { FilterBar } from "@/components/FilterBar";
 import { GridBackground } from "@/components/GridBackground";
@@ -8,6 +10,8 @@ import { TalentDetailSheet } from "@/components/TalentDetailSheet";
 import { TalentTable } from "@/components/TalentTable";
 import { Button } from "@/components/ui/button";
 import { N8N_ROSTER_WEBHOOK } from "@/config/rosterWebhook";
+import { authBypassEnabled } from "@/lib/authBypass";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   filterTalents,
@@ -41,7 +45,13 @@ function applyThemeClass(isDark: boolean) {
   else root.classList.remove("dark");
 }
 
-export default function App() {
+function TalentRosterApp({
+  onSignOut,
+  authBypassActive,
+}: {
+  onSignOut?: () => void;
+  authBypassActive?: boolean;
+}) {
   const [talents, setTalents] = useState<Talent[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -210,6 +220,18 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {onSignOut ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-border gap-2"
+                onClick={() => void onSignOut()}
+              >
+                <LogOut className="size-4" aria-hidden />
+                Sign out
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -242,6 +264,20 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {authBypassActive ? (
+        <div
+          className="relative z-10 border-b border-secondary/40 bg-secondary/15 px-4 py-2.5 text-center text-sm text-foreground"
+          role="status"
+        >
+          <strong className="font-medium">Login bypassed</strong> (
+          <code className="text-xs px-1 rounded bg-muted">VITE_BYPASS_AUTH</code>
+          ). Internal notes and resumes in the detail sheet need a real Supabase
+          session. Remove this from{" "}
+          <code className="text-xs px-1 rounded bg-muted">.env.local</code> when
+          you can sign in again.
+        </div>
+      ) : null}
 
       {loadError ? (
         <div
@@ -302,5 +338,46 @@ export default function App() {
         }}
       />
     </div>
+  );
+}
+
+
+export default function App() {
+  const {
+    configured,
+    initializing,
+    session,
+    signOut,
+    isPasswordRecovery,
+  } = useSupabaseAuth();
+
+  const bypass = authBypassEnabled;
+
+  if (configured && !bypass && initializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">
+        <RefreshCw className="size-8 animate-spin" aria-hidden />
+        <span className="sr-only">Loading session</span>
+      </div>
+    );
+  }
+
+  if (configured && !bypass && !session) {
+    return <AuthLoginPage />;
+  }
+
+  if (configured && !bypass && session && isPasswordRecovery) {
+    return <AuthUpdatePasswordPage />;
+  }
+
+  return (
+    <TalentRosterApp
+      authBypassActive={Boolean(configured && bypass)}
+      onSignOut={
+        configured && !bypass && session
+          ? () => void signOut()
+          : undefined
+      }
+    />
   );
 }
