@@ -16,12 +16,38 @@ To regenerate these images after UI changes, install the Playwright browser once
 
 ## Run locally
 
+### Roster only (no Supabase / no API)
+
 ```bash
 npm install
 npm run dev
 ```
 
-Open the URL Vite prints (typically `http://localhost:5173`).
+Open the URL Vite prints (typically [http://localhost:5173](http://localhost:5173)). The app reads `public/roster.json` or cached n8n data; sign-in and notes/resumes stay hidden without Supabase env vars.
+
+### Full stack: UI + API (comments & resumes)
+
+Comments and resume uploads call a small **Node API** in [`api/`](api/), not Postgres or Storage from the browser. The API validates the Supabase session (`Authorization: Bearer …`) and uses the **service role** key server-side.
+
+1. Install dependencies **twice** (root SPA + API are separate packages):
+
+   ```bash
+   npm install
+   npm install --prefix api
+   ```
+
+2. Copy [.env.example](.env.example) to `.env.local` (or `.env`) and set at least `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL` (same URL as the `VITE_` project URL), and **`SUPABASE_SERVICE_ROLE_KEY`** (Dashboard → Settings → API → *service_role* — never commit it or prefix it with `VITE_`).
+
+3. Run **two** processes:
+
+   ```bash
+   npm run dev:api    # Express on http://127.0.0.1:3001
+   npm run dev        # Vite — proxies /api → that server
+   ```
+
+   Open [http://localhost:5173](http://localhost:5173). Leave `VITE_API_URL` unset so the UI uses same-origin `/api` (the Vite dev proxy rewrites it to port 3001).
+
+Optional: install API deps with `cd api && npm install` if you prefer; then `npm run dev` from `api/` instead of `npm run dev:api` from the repo root.
 
 ## Update roster data
 
@@ -53,7 +79,9 @@ npm run build
 npm run preview
 ```
 
-Static output is in `dist/` — suitable for any static host (S3, Netlify, Vercel, etc.).
+Output is in `dist/`. **`npm run preview`** serves that folder on a local URL; API routes under `/api` are **not** wired in preview the way they are in `npm run dev`, so comments/resumes need the API running separately (for example with **`VITE_API_URL`** pointing at it if it is not same-origin) or stick to **`npm run dev`** for full-stack local testing.
+
+For a **static host only** (S3, Netlify, Vercel, etc.), deploy the `dist/` assets *and* run the [`api/`](api/) service somewhere with HTTPS, then set **`VITE_API_URL`** to that API’s public origin (no trailing slash) at build time so the browser can reach it with CORS.
 
 ## Branding & fonts
 
@@ -61,9 +89,9 @@ Visual design follows Blueprint tokens (dark-first, purple / teal accents, Saans
 
 ## Supabase: sign-in, comments, resumes
 
-With `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set (see [.env.example](.env.example)), users authenticate via Supabase. The talent detail sheet includes **internal notes** (`talent_comments`) and **resume uploads** (private `resumes` storage bucket + `talent_resumes` metadata).
+With `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set (see [.env.example](.env.example)), users authenticate in the browser via Supabase. The talent detail sheet includes **internal notes** and **resume uploads**; those features call the **backend API**, which reads and writes **`talent_comments`**, **`talent_resumes`**, and the private **`resumes`** storage bucket using the service role. Configure that with the **Full stack** flow under [Run locally](#run-locally).
 
-If you are locked out locally (e.g. email rate limits), you may set **`VITE_BYPASS_AUTH=true`** in `.env.local` temporarily to load the roster without signing in. Remove it once you can authenticate again; Supabase-backed comments and resumes still require a real session.
+If you are locked out locally (e.g. email rate limits), you may set **`VITE_BYPASS_AUTH=true`** in `.env.local` temporarily to load the roster without signing in. Remove it once you can authenticate again; comments and resumes still need a real session and a running API.
 
 Apply the database migration once (SQL Editor in the Supabase dashboard, or `supabase db push` if you use the CLI):
 

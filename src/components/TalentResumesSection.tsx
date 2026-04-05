@@ -3,16 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { apiFetchJson, apiPostFormData } from "@/lib/apiClient";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import {
-  sanitizeResumeFileName,
-  stableTalentKey,
-  talentKeyToPathSegment,
-} from "@/lib/talentKey";
+import { stableTalentKey } from "@/lib/talentKey";
 import { cn } from "@/lib/utils";
 import type { Talent } from "@/types/talent";
 
-const RESUME_BUCKET = "resumes";
 const ACCEPT = ".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 type ResumeRow = {
@@ -47,7 +43,6 @@ function formatUploaded(iso: string): string {
 export function TalentResumesSection({ talent }: { talent: Talent }) {
   const { user } = useSupabaseAuth();
   const talentKey = stableTalentKey(talent);
-  const segment = talentKeyToPathSegment(talentKey);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [rows, setRows] = useState<ResumeRow[]>([]);
@@ -63,19 +58,14 @@ export function TalentResumesSection({ talent }: { talent: Talent }) {
     }
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
-      .from("talent_resumes")
-      .select(
-        "id, talent_key, storage_path, file_name, content_type, file_size, uploaded_by, uploaded_at",
-      )
-      .eq("talent_key", talentKey)
-      .order("uploaded_at", { ascending: false });
-
-    if (qErr) {
-      setError(qErr.message);
+    try {
+      const data = await apiFetchJson<ResumeRow[]>(
+        `/talents/${encodeURIComponent(talentKey)}/resumes`,
+      );
+      setRows(data ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load resumes");
       setRows([]);
-    } else {
-      setRows((data ?? []) as ResumeRow[]);
     }
     setLoading(false);
   }, [talentKey, user]);
@@ -95,36 +85,15 @@ export function TalentResumesSection({ talent }: { talent: Talent }) {
     setUploading(true);
     setError(null);
 
-    const safeName = sanitizeResumeFileName(file.name);
-    const objectId = crypto.randomUUID();
-    const storagePath = `${user.id}/${segment}/${objectId}_${safeName}`;
-
-    const { error: upErr } = await supabase.storage
-      .from(RESUME_BUCKET)
-      .upload(storagePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type || undefined,
-      });
-
-    if (upErr) {
-      setError(upErr.message);
-      setUploading(false);
-      return;
-    }
-
-    const { error: insErr } = await supabase.from("talent_resumes").insert({
-      talent_key: talentKey,
-      storage_path: storagePath,
-      file_name: safeName,
-      content_type: file.type || null,
-      file_size: file.size,
-      uploaded_by: user.id,
-    });
-
-    if (insErr) {
-      setError(insErr.message);
-      await supabase.storage.from(RESUME_BUCKET).remove([storagePath]);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      await apiPostFormData(
+        `/talents/${encodeURIComponent(talentKey)}/resumes`,
+        fd,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
       setUploading(false);
       return;
     }
@@ -133,20 +102,17 @@ export function TalentResumesSection({ talent }: { talent: Talent }) {
     void load();
   }
 
-  async function signedUrl(path: string): Promise<string | null> {
-    if (!supabase) return null;
-    const { data, error: uErr } = await supabase.storage
-      .from(RESUME_BUCKET)
-      .createSignedUrl(path, 3600);
-    if (uErr || !data?.signedUrl) return null;
-    return data.signedUrl;
-  }
-
   async function handleDownload(row: ResumeRow) {
-    const url = await signedUrl(row.storage_path);
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
-      return;
+    try {
+      const { signedUrl } = await apiFetchJson<{ signedUrl: string }>(
+        `/resumes/${encodeURIComponent(row.id)}/download`,
+      );
+      if (signedUrl) {
+        window.open(signedUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+    } catch {
+      /* fall through */
     }
     setError("Could not create download link.");
   }
@@ -154,20 +120,12 @@ export function TalentResumesSection({ talent }: { talent: Talent }) {
   async function handleDelete(row: ResumeRow) {
     if (!supabase || !user || row.uploaded_by !== user.id) return;
     setError(null);
-    const { error: stErr } = await supabase.storage
-      .from(RESUME_BUCKET)
-      .remove([row.storage_path]);
-    if (stErr) {
-      setError(stErr.message);
-      return;
-    }
-    const { error: delErr } = await supabase
-      .from("talent_resumes")
-      .delete()
-      .eq("id", row.id)
-      .eq("uploaded_by", user.id);
-    if (delErr) {
-      setError(delErr.message);
+    try {
+      await apiFetchJson(`/resumes/${encodeURIComponent(row.id)}`, {
+        method: "DELETE",
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
       return;
     }
     void load();

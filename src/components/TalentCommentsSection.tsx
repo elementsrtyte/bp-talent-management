@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { apiFetchJson } from "@/lib/apiClient";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { stableTalentKey } from "@/lib/talentKey";
 import { cn } from "@/lib/utils";
@@ -47,17 +48,14 @@ export function TalentCommentsSection({ talent }: { talent: Talent }) {
     }
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase
-      .from("talent_comments")
-      .select("id, talent_key, user_id, body, created_at")
-      .eq("talent_key", talentKey)
-      .order("created_at", { ascending: false });
-
-    if (qErr) {
-      setError(qErr.message);
+    try {
+      const data = await apiFetchJson<CommentRow[]>(
+        `/talents/${encodeURIComponent(talentKey)}/comments`,
+      );
+      setRows(data ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load comments");
       setRows([]);
-    } else {
-      setRows((data ?? []) as CommentRow[]);
     }
     setLoading(false);
   }, [talentKey, user]);
@@ -76,29 +74,29 @@ export function TalentCommentsSection({ talent }: { talent: Talent }) {
     if (!text) return;
     setSending(true);
     setError(null);
-    const { error: insErr } = await supabase.from("talent_comments").insert({
-      talent_key: talentKey,
-      user_id: user.id,
-      body: text,
-    });
-    setSending(false);
-    if (insErr) {
-      setError(insErr.message);
+    try {
+      await apiFetchJson(`/talents/${encodeURIComponent(talentKey)}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body: text }),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to post comment");
+      setSending(false);
       return;
     }
+    setSending(false);
     setBody("");
     void load();
   }
 
   async function handleDelete(id: string) {
     if (!supabase || !user) return;
-    const { error: delErr } = await supabase
-      .from("talent_comments")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-    if (delErr) {
-      setError(delErr.message);
+    try {
+      await apiFetchJson(`/comments/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete");
       return;
     }
     void load();
@@ -117,7 +115,7 @@ export function TalentCommentsSection({ talent }: { talent: Talent }) {
         Internal notes
       </p>
       <p className="text-[11px] text-muted-foreground">
-        Comments are stored in Supabase and shared with signed-in teammates.
+        Comments are stored via the app API and shared with signed-in teammates.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-2">
