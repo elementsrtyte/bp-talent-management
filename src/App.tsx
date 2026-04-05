@@ -1,9 +1,10 @@
-import { LogOut, Moon, RefreshCw, Sun } from "lucide-react";
+import { Moon, RefreshCw, Sun } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AuthLoginPage } from "@/components/AuthLoginPage";
 import { AuthUpdatePasswordPage } from "@/components/AuthUpdatePasswordPage";
 import { BlueprintLogo } from "@/components/BlueprintLogo";
+import { AccountMenu } from "@/components/AccountMenu";
 import { FilterBar } from "@/components/FilterBar";
 import { GridBackground } from "@/components/GridBackground";
 import { TalentDetailSheet } from "@/components/TalentDetailSheet";
@@ -48,9 +49,12 @@ function applyThemeClass(isDark: boolean) {
 function TalentRosterApp({
   onSignOut,
   authBypassActive,
+  signedInEmail,
 }: {
   onSignOut?: () => void;
   authBypassActive?: boolean;
+  /** When present, user is signed in with Supabase (email/password flow). */
+  signedInEmail?: string;
 }) {
   const [talents, setTalents] = useState<Talent[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -219,18 +223,9 @@ function TalentRosterApp({
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {onSignOut ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-border gap-2"
-                onClick={() => void onSignOut()}
-              >
-                <LogOut className="size-4" aria-hidden />
-                Sign out
-              </Button>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {signedInEmail && onSignOut ? (
+              <AccountMenu email={signedInEmail} onSignOut={onSignOut} />
             ) : null}
             <Button
               type="button"
@@ -373,6 +368,11 @@ export default function App() {
   return (
     <TalentRosterApp
       authBypassActive={Boolean(configured && bypass)}
+      signedInEmail={
+        configured && !bypass && session
+          ? (session.user.email ?? undefined)
+          : undefined
+      }
       onSignOut={
         configured && !bypass && session
           ? () => void signOut()
