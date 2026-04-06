@@ -16,38 +16,39 @@ To regenerate these images after UI changes, install the Playwright browser once
 
 ## Run locally
 
-### Roster only (no Supabase / no API)
+### Roster only (no Supabase / no API process)
+
+If you want only the Vite dev server (no Express on port 3001):
 
 ```bash
 npm install
-npm run dev
+npm run dev:vite
 ```
 
-Open the URL Vite prints (typically [http://localhost:5173](http://localhost:5173)). The app reads `public/roster.json` or cached n8n data; sign-in and notes/resumes stay hidden without Supabase env vars.
+Open the URL Vite prints (typically [http://localhost:5173](http://localhost:5173)). Comments/resumes API calls will fail unless you also run the server (below) or point `VITE_API_URL` at a deployed API.
 
 ### Full stack: UI + API (comments & resumes)
 
-Comments and resume uploads call a small **Node API** in [`api/`](api/), not Postgres or Storage from the browser. The API validates the Supabase session (`Authorization: Bearer …`) and uses the **service role** key server-side.
+One **npm install**. Comments and resume uploads hit **`/api` on the same Express app** in [`server/`](server/) (not Postgres or Storage from the browser). The server validates the Supabase session (`Authorization: Bearer …`) and uses the **service role** key server-side.
 
-1. Install dependencies **twice** (root SPA + API are separate packages):
+1. Install dependencies:
 
    ```bash
    npm install
-   npm install --prefix api
    ```
 
-2. Copy [.env.example](.env.example) to `.env.local` (or `.env`) and set at least `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL` (same URL as the `VITE_` project URL), and **`SUPABASE_SERVICE_ROLE_KEY`** (Dashboard → Settings → API → *service_role* — never commit it or prefix it with `VITE_`).
+2. Copy [.env.example](.env.example) to `.env.local` (or `.env`) and set at least `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL` (same URL as the `VITE_` project URL), and **`SUPABASE_SERVICE_ROLE_KEY`** (Dashboard → Settings → API → *service_role* — never commit it or prefix it with `VITE_`). The **Node server loads `.env.local` and `.env`** via `dotenv` (Vite does not inject those into the Express process automatically).
 
-3. Run **two** processes:
+3. Run **Vite + server** together:
 
    ```bash
-   npm run dev:api    # Express on http://127.0.0.1:3001
-   npm run dev        # Vite — proxies /api → that server
+   npm run dev
    ```
 
-   Open [http://localhost:5173](http://localhost:5173). Leave `VITE_API_URL` unset so the UI uses same-origin `/api` (the Vite dev proxy rewrites it to port 3001).
+   - Vite: [http://localhost:5173](http://localhost:5173) — proxies `/api` to the server on port **3001**.
+   - API: [http://127.0.0.1:3001](http://127.0.0.1:3001) (`/api/...` paths; use `GET /health` for health checks).
 
-Optional: install API deps with `cd api && npm install` if you prefer; then `npm run dev` from `api/` instead of `npm run dev:api` from the repo root.
+   Leave `VITE_API_URL` unset so the UI uses same-origin `/api` through the dev proxy.
 
 ## Update roster data
 
@@ -72,16 +73,25 @@ If there is **no** cached webhook payload yet, the app loads `public/roster.json
 
 The **Skills** column, skill filters, and search use **`Augmented Skillsets`** (comma-separated). The legacy **`Skillset(s)`** column is not read by the app.
 
-## Build
+## Build & production
 
 ```bash
 npm run build
+npm start
+```
+
+- **`npm run build`** — Typecheck (app + `server/`) and Vite → **`dist/`**.
+- **`npm start`** — `NODE_ENV=production`: Express serves **`/api/*`** and the **static SPA** from **`dist/`** on **`PORT`** (default **3001** locally; Railway sets `PORT`).
+
+For a quick static preview **without** the server (roster UI only):
+
+```bash
 npm run preview
 ```
 
-Output is in `dist/`. **`npm run preview`** serves that folder on a local URL; API routes under `/api` are **not** wired in preview the way they are in `npm run dev`, so comments/resumes need the API running separately (for example with **`VITE_API_URL`** pointing at it if it is not same-origin) or stick to **`npm run dev`** for full-stack local testing.
+`preview` does not run Express; use `npm start` after a build for full-stack local testing.
 
-For a **static host only** (S3, Netlify, Vercel, etc.), deploy the `dist/` assets *and* run the [`api/`](api/) service somewhere with HTTPS, then set **`VITE_API_URL`** to that API’s public origin (no trailing slash) at build time so the browser can reach it with CORS.
+For **split hosting** (static CDN + API elsewhere), build the SPA with **`VITE_API_URL`** set to the API’s public origin (no trailing slash).
 
 ## Branding & fonts
 
@@ -89,9 +99,9 @@ Visual design follows Blueprint tokens (dark-first, purple / teal accents, Saans
 
 ## Supabase: sign-in, comments, resumes
 
-With `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set (see [.env.example](.env.example)), users authenticate in the browser via Supabase. The talent detail sheet includes **internal notes** and **resume uploads**; those features call the **backend API**, which reads and writes **`talent_comments`**, **`talent_resumes`**, and the private **`resumes`** storage bucket using the service role. Configure that with the **Full stack** flow under [Run locally](#run-locally).
+With `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set (see [.env.example](.env.example)), users authenticate in the browser via Supabase. The talent detail sheet includes **internal notes** and **resume uploads**; those features call **`/api`** on the Node server, which reads and writes **`talent_comments`**, **`talent_resumes`**, and the private **`resumes`** storage bucket using the service role. Use the **Full stack** flow under [Run locally](#full-stack-ui--api-comments--resumes).
 
-If you are locked out locally (e.g. email rate limits), you may set **`VITE_BYPASS_AUTH=true`** in `.env.local` temporarily to load the roster without signing in. Remove it once you can authenticate again; comments and resumes still need a real session and a running API.
+If you are locked out locally (e.g. email rate limits), you may set **`VITE_BYPASS_AUTH=true`** in `.env.local` temporarily to load the roster without signing in. Remove it once you can authenticate again; comments and resumes still need a real session and the server running with `SUPABASE_*` secrets.
 
 Apply the database migration once (SQL Editor in the Supabase dashboard, or `supabase db push` if you use the CLI):
 

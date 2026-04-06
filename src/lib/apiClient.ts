@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-/** Base URL for the talent API (no trailing slash). Empty defaults to `/api` (Vite dev proxy or same-origin gateway). */
+/** Base URL for the talent API (no trailing slash). Empty defaults to `/api` (dev proxy or same-origin in production). */
 export function getApiBase(): string {
   const v = import.meta.env.VITE_API_URL as string | undefined;
   if (v === undefined || v === null || String(v).trim() === "") {

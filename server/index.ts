@@ -1,14 +1,29 @@
-import cors from "cors";
-import express from "express";
-import multer from "multer";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 
-import { requireAuth, type AuthedRequest } from "./auth.js";
-import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import cors from "cors";
+import dotenv from "dotenv";
+import express from "express";
+import multer from "multer";
+
+import { requireAuth, type AuthedRequest } from "./auth";
+import { getSupabaseAdminForRequest } from "./supabaseAdmin";
 import {
   sanitizeResumeFileName,
   talentKeyToPathSegment,
-} from "./talentKey.js";
+} from "./talentKey";
+
+function paramString(v: string | string[] | undefined): string {
+  const s = Array.isArray(v) ? v[0] : v;
+  return typeof s === "string" ? s : "";
+}
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Vite loads .env* for the browser; Node does not — load the same files for the server.
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 const RESUMES_BUCKET = "resumes";
 
@@ -21,16 +36,20 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "128kb" }));
 
+/** Railway / load balancers — not under /api. */
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get(
+const api = express.Router();
+
+api.get(
   "/talents/:talentKey/comments",
   requireAuth,
   async (req, res) => {
-    const talentKey = decodeURIComponent(req.params.talentKey);
-    const admin = getSupabaseAdmin();
+    const talentKey = decodeURIComponent(paramString(req.params.talentKey));
+    const admin = getSupabaseAdminForRequest(res);
+    if (!admin) return;
     const { data, error } = await admin
       .from("talent_comments")
       .select("id, talent_key, user_id, body, created_at")
@@ -44,18 +63,19 @@ app.get(
   },
 );
 
-app.post(
+api.post(
   "/talents/:talentKey/comments",
   requireAuth,
   async (req, res) => {
     const auth = req as AuthedRequest;
-    const talentKey = decodeURIComponent(req.params.talentKey);
+    const talentKey = decodeURIComponent(paramString(req.params.talentKey));
     const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
     if (!body || body.length > 10_000) {
       res.status(400).json({ error: "body required, max 10000 chars" });
       return;
     }
-    const admin = getSupabaseAdmin();
+    const admin = getSupabaseAdminForRequest(res);
+    if (!admin) return;
     const { error } = await admin.from("talent_comments").insert({
       talent_key: talentKey,
       user_id: auth.user.id,
@@ -69,10 +89,11 @@ app.post(
   },
 );
 
-app.delete("/comments/:commentId", requireAuth, async (req, res) => {
-  const { commentId } = req.params;
+api.delete("/comments/:commentId", requireAuth, async (req, res) => {
+  const commentId = paramString(req.params.commentId);
   const user = (req as AuthedRequest).user;
-  const admin = getSupabaseAdmin();
+  const admin = getSupabaseAdminForRequest(res);
+  if (!admin) return;
   const { error } = await admin
     .from("talent_comments")
     .delete()
@@ -85,12 +106,13 @@ app.delete("/comments/:commentId", requireAuth, async (req, res) => {
   res.status(204).send();
 });
 
-app.get(
+api.get(
   "/talents/:talentKey/resumes",
   requireAuth,
   async (req, res) => {
-    const talentKey = decodeURIComponent(req.params.talentKey);
-    const admin = getSupabaseAdmin();
+    const talentKey = decodeURIComponent(paramString(req.params.talentKey));
+    const admin = getSupabaseAdminForRequest(res);
+    if (!admin) return;
     const { data, error } = await admin
       .from("talent_resumes")
       .select(
@@ -106,13 +128,13 @@ app.get(
   },
 );
 
-app.post(
+api.post(
   "/talents/:talentKey/resumes",
   requireAuth,
   upload.single("file"),
   async (req, res) => {
     const auth = req as AuthedRequest;
-    const talentKey = decodeURIComponent(req.params.talentKey);
+    const talentKey = decodeURIComponent(paramString(req.params.talentKey));
     const file = req.file;
     if (!file?.buffer) {
       res.status(400).json({ error: "file required" });
@@ -124,7 +146,8 @@ app.post(
     const objectId = randomUUID();
     const storagePath = `${userId}/${segment}/${objectId}_${safeName}`;
 
-    const admin = getSupabaseAdmin();
+    const admin = getSupabaseAdminForRequest(res);
+    if (!admin) return;
     const { error: upErr } = await admin.storage
       .from(RESUMES_BUCKET)
       .upload(storagePath, file.buffer, {
@@ -155,9 +178,10 @@ app.post(
   },
 );
 
-app.get("/resumes/:resumeId/download", requireAuth, async (req, res) => {
-  const { resumeId } = req.params;
-  const admin = getSupabaseAdmin();
+api.get("/resumes/:resumeId/download", requireAuth, async (req, res) => {
+  const resumeId = paramString(req.params.resumeId);
+  const admin = getSupabaseAdminForRequest(res);
+  if (!admin) return;
   const { data: row, error: qErr } = await admin
     .from("talent_resumes")
     .select("storage_path")
@@ -177,10 +201,11 @@ app.get("/resumes/:resumeId/download", requireAuth, async (req, res) => {
   res.json({ signedUrl: signed.signedUrl });
 });
 
-app.delete("/resumes/:resumeId", requireAuth, async (req, res) => {
-  const { resumeId } = req.params;
+api.delete("/resumes/:resumeId", requireAuth, async (req, res) => {
+  const resumeId = paramString(req.params.resumeId);
   const user = (req as AuthedRequest).user;
-  const admin = getSupabaseAdmin();
+  const admin = getSupabaseAdminForRequest(res);
+  if (!admin) return;
   const { data: row, error: qErr } = await admin
     .from("talent_resumes")
     .select("id, storage_path, uploaded_by")
@@ -213,7 +238,24 @@ app.delete("/resumes/:resumeId", requireAuth, async (req, res) => {
   res.status(204).send();
 });
 
+app.use("/api", api);
+
+const isProd = process.env.NODE_ENV === "production";
+
+if (isProd) {
+  const dist = path.resolve(__dirname, "../dist");
+  app.use(express.static(dist));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(dist, "index.html"));
+  });
+}
+
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 app.listen(port, "0.0.0.0", () => {
-  console.log(`api listening on ${port}`);
+  console.log(`server listening on ${port}`);
+  if (isProd) {
+    console.log("serving SPA from dist/");
+  } else {
+    console.log("API at /api/* — use Vite dev server (proxies /api here)");
+  }
 });
